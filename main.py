@@ -12,22 +12,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # Explicitly register Algerian Font from Windows Fonts directory
-try:
-    font_path = r"C:\Windows\Fonts\alger.ttf"
-    if not os.path.exists(font_path):
-        font_path = r"C:\Windows\Fonts\ALGER.TTF"
-    
-    if os.path.exists(font_path):
-        pdfmetrics.registerFont(TTFont('Algerian', font_path))
-    else:
-        windir = os.environ.get('WINDIR', 'C:\\Windows')
-        alt_path = os.path.join(windir, 'Fonts', 'alger.ttf')
-        if os.path.exists(alt_path):
-            pdfmetrics.registerFont(TTFont('Algerian', alt_path))
-except Exception as e:
-    print(f"Font registration error: {e}")
-
-st.set_page_config(page_title="Holy Child School - Management Hub", layout="wide")
+pdfmetrics.registerFont(TTFont('Algerian', 'alger.ttf'))
 
 # ==========================================
 # 📊 EXCEL COLUMN MAPPING CONFIGURATION
