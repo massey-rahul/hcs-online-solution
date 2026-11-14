@@ -12,7 +12,7 @@ from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
 # Explicitly register Algerian Font from Windows Fonts directory
-pdfmetrics.registerFont(TTFont('Algerian', 'alger.ttf'))
+pdfmetrics.registerFont(TTFont('Helvetica-Bold', 'alger.ttf'))
 
 # ==========================================
 # 📊 EXCEL COLUMN MAPPING CONFIGURATION
