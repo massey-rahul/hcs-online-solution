@@ -11,19 +11,20 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Explicitly register Algerian Font from Windows Fonts directory
+# Bulletproof Font Registration (Works on both Windows Desktop & Streamlit Cloud)
 try:
-    font_path = r"C:\Windows\Fonts\alger.ttf"
-    if not os.path.exists(font_path):
-        font_path = r"C:\Windows\Fonts\ALGER.TTF"
-    
-    if os.path.exists(font_path):
-        pdfmetrics.registerFont(TTFont('Algerian', font_path))
-    else:
-        windir = os.environ.get('WINDIR', 'C:\\Windows')
-        alt_path = os.path.join(windir, 'Fonts', 'alger.ttf')
-        if os.path.exists(alt_path):
-            pdfmetrics.registerFont(TTFont('Algerian', alt_path))
+    font_registered = False
+    possible_paths = [
+        "alger.ttf", 
+        "ALGER.TTF", 
+        r"C:\Windows\Fonts\alger.ttf", 
+        r"C:\Windows\Fonts\ALGER.TTF"
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont('Algerian', path))
+            font_registered = True
+            break
 except Exception as e:
     print(f"Font registration error: {e}")
 
@@ -197,7 +198,6 @@ def generate_admission_pdf(ref_number):
                 return 'NURSERY'
             return val_str.upper()
         
-        # Keep Caste blank if it accidentally contains 'FEMALE' or 'MALE'
         if col_letter == COL_CASTE:
             if val_str.upper() in ['FEMALE', 'MALE']:
                 return ''
@@ -608,7 +608,6 @@ def generate_admission_pdf(ref_number):
     p1_sig_x2 = right_margin - 20
     c.line(p1_sig_x1, y, p1_sig_x2, y)
     c.setFont("Helvetica", 10)
-    # Slash positioned right on top of the line
     c.drawCentredString((p1_sig_x1 + p1_sig_x2) / 2.0, y, "/")
     
     y -= 12
@@ -678,14 +677,12 @@ def generate_admission_pdf(ref_number):
     c.setDash(1, 2)
     c.setLineWidth(1)
     
-    # Bottom Parent Signature Line & Slash right on top of the line
     p_sig_x1 = left_margin
     p_sig_x2 = left_margin + 180
     c.line(p_sig_x1, y, p_sig_x2, y)
     c.setFont("Helvetica", 10)
     c.drawCentredString((p_sig_x1 + p_sig_x2) / 2.0, y, "/")
 
-    # Bottom Principal Signature Line & Slash right on top of the line
     pr_sig_x1 = 380
     pr_sig_x2 = right_margin - 20
     c.line(pr_sig_x1, y, pr_sig_x2, y)
@@ -898,15 +895,14 @@ elif menu == "Acknowledgement Receipts (4-in-1)":
         st.write("---")
         
         selected_refs = st.multiselect("Select up to 4 Registration Numbers (Column C):", ref_list, max_selections=4)
-        
         if st.button("Generate 4-in-1 Receipts PDF", type="primary"):
             if selected_refs:
                 pdf_file = generate_4_receipts_pdf(selected_refs)
                 if pdf_file and os.path.exists(pdf_file):
-                    st.success("✅ Receipts PDF Successfully Generated!")
+                    st.success("✅ 4-in-1 Receipts PDF Successfully Generated!")
                     with open(pdf_file, "rb") as f:
-                        st.download_button("📥 Download Receipts PDF", f, file_name=os.path.basename(pdf_file), mime="application/pdf")
+                        st.download_button("📥 Download 4-in-1 Receipts", f, file_name=os.path.basename(pdf_file), mime="application/pdf")
                 else:
-                    st.error("⚠️ Receipts generate karne mein koi problem aayi.")
+                    st.error("⚠️ PDF generate karne mein koi problem aayi.")
             else:
                 st.warning("⚠️ Kripya kam se kam ek Registration Number select karein.")
