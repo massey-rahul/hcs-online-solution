@@ -213,7 +213,7 @@ def generate_admission_pdf(ref_number):
     
     left_margin = 42  
     right_margin = width - 30  
-    top_offset = height - 65   
+    top_offset = height - 75   # Print margin safe karne ke liye
 
     logo_path = "school_logo.png"
     if os.path.exists(logo_path):
@@ -222,14 +222,20 @@ def generate_admission_pdf(ref_number):
         except Exception:
             pass
 
+    # Top Heading: Font size increased to 24
     try:
-        c.setFont("Algerian", 21)
+        c.setFont("Algerian", 24)
     except Exception:
-        c.setFont("Helvetica-Bold", 21)
+        c.setFont("Helvetica-Bold", 24)
         
+    c._code.append('2 Tr')  # Mode 2 = Fill + Stroke (Font ko mota/bold karne ke liye)
+    c.setLineWidth(0.5)     # Stroke ki thickness
     c.drawCentredString(width / 2.0, top_offset + 2, "HOLY CHILD SCHOOL, GHAZIABAD")
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(width / 2.0, top_offset - 18, "ADMISSION FORM")
+    c._code.append('0 Tr')  # Wapas normal mode par reset karna zaroori hai
+    
+    # Second Line (Admission Form): Font size increased to 15
+    c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(width / 2.0, top_offset - 20, "ADMISSION FORM")
 
     c.setFont("Helvetica", 10.5)
     c.drawString(430, top_offset - 40, "Ref. No. :")
