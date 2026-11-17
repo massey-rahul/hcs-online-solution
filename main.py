@@ -194,14 +194,20 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Zero-delay embedded PDF viewer optimized for Streamlit Cloud"""
+    """Cloud & Local friendly PDF viewer & download handler"""
     with open(pdf_path, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
     
-    # Using an embedded embed tag which renders instantly without needing a refresh
+    # Modern HTML object with fallback notice for strict cloud browsers
     pdf_display = f'''
     <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 10px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <embed src="data:application/pdf;base64,{base64_pdf}#view=FitH" type="application/pdf" width="100%" height="850px" />
+        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="850px" style="border: none;">
+            <div style="text-align: center; padding: 40px;">
+                <h3 style="color: #1e3d59;">📄 Admission Form PDF is Generated Successfully!</h3>
+                <p style="color: #666; margin-bottom: 20px;">Cloud browser security restricts direct inline preview. Please use the button below to view or download:</p>
+                <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">🔍 Open / Download PDF in New Tab</a>
+            </div>
+        </object>
     </div>
     '''
     st.markdown(pdf_display, unsafe_allow_html=True)
