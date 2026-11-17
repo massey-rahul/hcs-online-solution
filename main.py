@@ -194,10 +194,9 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Reliable PDF preview that works on both localhost and cloud"""
+    """Professional full-width live PDF preview inside Streamlit"""
     with open(pdf_path, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
-    
     pdf_display = f'''
     <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
         <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH" width="100%" height="850px" style="border: none;"></iframe>
@@ -910,7 +909,7 @@ if menu == "Admission Form Generator":
             if pdf_file and os.path.exists(pdf_file):
                 st.success("✅ PDF Successfully Generated! Professional Preview is loaded below:")
                 
-                show_pdf_preview(pdf_file)  # <--- Yeh preview dikhayega
+                show_pdf_preview(pdf_file)  # <--- Preview wapas add kar diya hai
                 
                 st.write("")
                 col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
@@ -948,7 +947,9 @@ elif menu == "Acknowledgement Receipts (4-in-1)":
             if selected_refs:
                 pdf_file = generate_4_receipts_pdf(selected_refs)
                 if pdf_file and os.path.exists(pdf_file):
-                    show_pdf_preview(pdf_file)
+                    st.success("✅ 4-in-1 Receipts PDF Successfully Generated! Professional Preview is loaded below:")
+                    
+                    show_pdf_preview(pdf_file)  # <--- Preview wapas add kar diya hai
                     
                     st.write("")
                     col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
@@ -956,7 +957,7 @@ elif menu == "Acknowledgement Receipts (4-in-1)":
                         with open(pdf_file, "rb") as f:
                             st.download_button(
                                 "📥 Download 4-in-1 Receipts (PDF)", 
-                                f, 
+                                f, 14, 
                                 file_name=os.path.basename(pdf_file), 
                                 mime="application/pdf",
                                 use_container_width=True
