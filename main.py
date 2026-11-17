@@ -194,12 +194,16 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Professional full-width live PDF preview with auto-fit zoom inside Streamlit"""
+    """Reliable PDF preview and download helper for Streamlit Cloud"""
     with open(pdf_path, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    
+    # Using object tag instead of iframe for better browser compatibility
     pdf_display = f'''
     <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH" width="100%" height="850px" style="border: none;"></iframe>
+        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="850px">
+            <p style="text-align: center; padding: 20px;">Your browser does not support embedded PDFs. Please use the download button below to view the form.</p>
+        </object>
     </div>
     '''
     st.markdown(pdf_display, unsafe_allow_html=True)
