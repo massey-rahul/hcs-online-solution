@@ -11,19 +11,20 @@ from reportlab.lib import colors
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Explicitly register Algerian Font from Windows Fonts directory
+# Bulletproof Font Registration (Works on both Windows Desktop & Streamlit Cloud)
 try:
-    font_path = r"C:\Windows\Fonts\alger.ttf"
-    if not os.path.exists(font_path):
-        font_path = r"C:\Windows\Fonts\ALGER.TTF"
-    
-    if os.path.exists(font_path):
-        pdfmetrics.registerFont(TTFont('Algerian', font_path))
-    else:
-        windir = os.environ.get('WINDIR', 'C:\\Windows')
-        alt_path = os.path.join(windir, 'Fonts', 'alger.ttf')
-        if os.path.exists(alt_path):
-            pdfmetrics.registerFont(TTFont('Algerian', alt_path))
+    font_registered = False
+    possible_paths = [
+        "alger.ttf", 
+        "ALGER.TTF", 
+        r"C:\Windows\Fonts\alger.ttf", 
+        r"C:\Windows\Fonts\ALGER.TTF"
+    ]
+    for path in possible_paths:
+        if os.path.exists(path):
+            pdfmetrics.registerFont(TTFont('Algerian', path))
+            font_registered = True
+            break
 except Exception as e:
     print(f"Font registration error: {e}")
 
@@ -89,7 +90,7 @@ def format_address(addr_str):
     text = str(addr_str).strip()
     text = re.sub(r'^(?:S/O|C/O|D/O|W/O)\s*[:\-]?\s*[^,\n]+,\s*', '', text, flags=re.IGNORECASE)
     formatted = re.sub(r'uttar\s+pradesh', 'U.P.', text, flags=re.IGNORECASE)
-    return formatted.strip()
+    return formatted.strip().title()
 
 def clean_office_address(addr_str):
     if not addr_str:
@@ -109,6 +110,11 @@ def extract_address_and_pin(addr_str):
         clean_addr = cleaned_addr.replace(pin, "").strip(" ,-/")
         return clean_addr, pin
     return cleaned_addr, ""
+
+def format_email(email_str):
+    if not email_str:
+        return ""
+    return str(email_str).strip().lower()
 
 def number_to_words(date_str):
     try:
@@ -136,7 +142,7 @@ def number_to_words(date_str):
         if y_first == 20:
             y_words.append("Two Thousand")
             if y_second > 0:
-                y_words.append(num_to_w(y_second).lower())
+                y_words.append(num_to_w(y_second))  # <--- Yahan se .lower() hata diya hai
         else:
             y_words.append(str(year))
             
@@ -164,7 +170,7 @@ def get_row_data(ref_number):
             return row
     return None
 
-def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", start_size=10, min_size=7.5):
+def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", start_size=10, min_size=6):
     size = start_size
     while size > min_size and c.stringWidth(text, font_name, size) > max_width:
         size -= 0.5
@@ -191,6 +197,11 @@ def generate_admission_pdf(ref_number):
             if val_str.lower() in ['nur', 'nursery']:
                 return 'NURSERY'
             return val_str.upper()
+        
+        if col_letter == COL_CASTE:
+            if val_str.upper() in ['FEMALE', 'MALE']:
+                return ''
+                
         return val_str
 
     output_dir = os.path.abspath("Generated_Admission_Forms")
@@ -201,8 +212,8 @@ def generate_admission_pdf(ref_number):
     width, height = legal
     
     left_margin = 42  
-    right_margin = width - 30  # Right margin ko thoda aur andar (left) kar diya gaya hai
-    top_offset = height - 65   
+    right_margin = width - 30  
+    top_offset = height - 75   # Print margin safe karne ke liye
 
     logo_path = "school_logo.png"
     if os.path.exists(logo_path):
@@ -211,14 +222,20 @@ def generate_admission_pdf(ref_number):
         except Exception:
             pass
 
+    # Top Heading: Font size increased to 24
     try:
-        c.setFont("Algerian", 21)
+        c.setFont("Algerian", 24)
     except Exception:
-        c.setFont("Helvetica-Bold", 21)
+        c.setFont("Helvetica-Bold", 24)
         
+    c._code.append('2 Tr')  # Mode 2 = Fill + Stroke (Font ko mota/bold karne ke liye)
+    c.setLineWidth(0.5)     # Stroke ki thickness
     c.drawCentredString(width / 2.0, top_offset + 2, "HOLY CHILD SCHOOL, GHAZIABAD")
-    c.setFont("Helvetica-Bold", 12)
-    c.drawCentredString(width / 2.0, top_offset - 18, "ADMISSION FORM")
+    c._code.append('0 Tr')  # Wapas normal mode par reset karna zaroori hai
+    
+    # Second Line (Admission Form): Font size increased to 15
+    c.setFont("Helvetica-Bold", 15)
+    c.drawCentredString(width / 2.0, top_offset - 20, "ADMISSION FORM")
 
     c.setFont("Helvetica", 10.5)
     c.drawString(430, top_offset - 40, "Ref. No. :")
@@ -387,8 +404,7 @@ def generate_admission_pdf(ref_number):
     
     c.setFont("Helvetica", 10)
     c.drawString(330, y, "o) E-mail :")
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(377, y, f" {val(COL_EMAIL)}")
+    draw_fitted_string(c, 377, y, f" {format_email(val(COL_EMAIL))}", right_margin - 377, font_name="Helvetica-Bold", start_size=10, min_size=7)
     c.line(374, y - 3, right_margin, y - 3)
 
     # ==========================================
@@ -409,8 +425,7 @@ def generate_admission_pdf(ref_number):
     
     c.setFont("Helvetica", 10)
     c.drawString(318, y, "& Edu. Qual. :")
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(397, y, f" {f_qual}")
+    draw_fitted_string(c, 397, y, f" {f_qual}", right_margin - 397, font_name="Helvetica-Bold", start_size=10, min_size=6)
     c.line(394, y - 3, right_margin, y - 3)
     
     y -= line_gap
@@ -435,15 +450,14 @@ def generate_admission_pdf(ref_number):
     f_occ_extra = val(COL_FATHER_OCC_EXTRA)
     f_occ_display = f"{f_occ} ({f_occ_extra})" if f_occ_extra else f_occ
     
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 152, y, f" {f_occ_display}")
+    draw_fitted_string(c, left_margin + 152, y, f" {f_occ_display}", right_margin - (left_margin + 152), font_name="Helvetica-Bold", start_size=10, min_size=6)
     c.setDash(1, 2)
     c.line(left_margin + 149, y - 3, right_margin, y - 3)
 
     y -= line_gap
     c.setFont("Helvetica", 10)
     c.drawString(left_margin + 25, y, "Office Address :")
-    draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_FATHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7.5)
+    draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_FATHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7)
     c.setDash(1, 2)
     c.line(left_margin + 99, y - 3, right_margin, y - 3)
 
@@ -461,8 +475,7 @@ def generate_admission_pdf(ref_number):
 
     c.setFont("Helvetica", 10)
     c.drawString(318, y, "& Edu. Qual. :")
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(397, y, f" {m_qual}")  
+    draw_fitted_string(c, 397, y, f" {m_qual}", right_margin - 397, font_name="Helvetica-Bold", start_size=10, min_size=6)  
     c.line(394, y - 3, right_margin, y - 3)
 
     y -= line_gap
@@ -482,15 +495,14 @@ def generate_admission_pdf(ref_number):
     y -= line_gap
     c.setFont("Helvetica", 10)
     c.drawString(left_margin + 25, y, "Occupation / Designation :")
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 152, y, f" {val(COL_MOTHER_OCC)}")
+    draw_fitted_string(c, left_margin + 152, y, f" {val(COL_MOTHER_OCC)}", right_margin - (left_margin + 152), font_name="Helvetica-Bold", start_size=10, min_size=6)
     c.setDash(1, 2)
     c.line(left_margin + 149, y - 3, right_margin, y - 3)
 
     y -= line_gap
     c.setFont("Helvetica", 10)
     c.drawString(left_margin + 25, y, "Office Address :")
-    draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_MOTHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7.5)
+    draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_MOTHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7)
     c.setDash(1, 2)
     c.line(left_margin + 99, y - 3, right_margin, y - 3)
 
@@ -503,7 +515,7 @@ def generate_admission_pdf(ref_number):
     c.drawString(left_margin + 15, y, "a) Permanent Address :")
     
     perm_clean, perm_pin = extract_address_and_pin(val(COL_PERM_ADDR))
-    draw_fitted_string(c, left_margin + 122, y, f" {perm_clean}", right_margin - (left_margin + 122), font_name="Helvetica-Bold", start_size=10, min_size=7.5)
+    draw_fitted_string(c, left_margin + 122, y, f" {perm_clean}", right_margin - (left_margin + 122), font_name="Helvetica-Bold", start_size=10, min_size=7)
     c.setDash(1, 2)
     c.line(left_margin + 119, y - 3, right_margin, y - 3)
     
@@ -521,7 +533,7 @@ def generate_admission_pdf(ref_number):
     c.drawString(left_margin + 15, y, "b) Present Address :")
     
     pres_clean, pres_pin = extract_address_and_pin(val(COL_PRES_ADDR))
-    draw_fitted_string(c, left_margin + 112, y, f" {pres_clean}", right_margin - (left_margin + 112), font_name="Helvetica-Bold", start_size=10, min_size=7.5)
+    draw_fitted_string(c, left_margin + 112, y, f" {pres_clean}", right_margin - (left_margin + 112), font_name="Helvetica-Bold", start_size=10, min_size=7)
     c.setDash(1, 2)
     c.line(left_margin + 109, y - 3, right_margin, y - 3)
     
@@ -598,11 +610,15 @@ def generate_admission_pdf(ref_number):
     y = y - t1_h - 25
     c.setDash(1, 2)
     c.setLineWidth(1)
-    c.line(380, y, right_margin - 20, y)
+    p1_sig_x1 = 380
+    p1_sig_x2 = right_margin - 20
+    c.line(p1_sig_x1, y, p1_sig_x2, y)
+    c.setFont("Helvetica", 10)
+    c.drawCentredString((p1_sig_x1 + p1_sig_x2) / 2.0, y, "/")
     
     y -= 12
     c.setFont("Helvetica", 10)
-    c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Parent's")
+    c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Parent")
 
     y -= 12
     c.setDash()
@@ -666,12 +682,21 @@ def generate_admission_pdf(ref_number):
     y -= 35
     c.setDash(1, 2)
     c.setLineWidth(1)
-    c.line(left_margin, y, left_margin + 180, y)
-    c.line(380, y, right_margin - 20, y)
+    
+    p_sig_x1 = left_margin
+    p_sig_x2 = left_margin + 180
+    c.line(p_sig_x1, y, p_sig_x2, y)
+    c.setFont("Helvetica", 10)
+    c.drawCentredString((p_sig_x1 + p_sig_x2) / 2.0, y, "/")
+
+    pr_sig_x1 = 380
+    pr_sig_x2 = right_margin - 20
+    c.line(pr_sig_x1, y, pr_sig_x2, y)
+    c.drawCentredString((pr_sig_x1 + pr_sig_x2) / 2.0, y, "/")
     
     y -= 12
     c.setFont("Helvetica", 10)
-    c.drawCentredString(left_margin + 90, y, "Signature of Parent's")
+    c.drawCentredString(left_margin + 90, y, "Signature of Parent")
     c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Principal")
 
     c.setDash()
@@ -851,19 +876,14 @@ if menu == "Admission Form Generator":
             selected_ref = st.selectbox("Select Registration Number (Column C):", ref_list)
         with col2:
             st.write("")
-            st.write("")
-            generate_btn = st.button("🚀 Generate PDF Form", use_container_width=True)
-        
-        if selected_ref and generate_btn:
-            pdf_file_path = generate_admission_pdf(selected_ref)
-            if pdf_file_path and os.path.exists(pdf_file_path):
-                st.success("✨ Admission Form successfully generate ho gaya hai!")
-                with open(pdf_file_path, "rb") as pdf_file:
-                    st.download_button("📥 Download PDF Form", data=pdf_file, file_name=os.path.basename(pdf_file_path), mime="application/pdf", use_container_width=True)
-            else:
-                st.error("⚠️ Form generate karne mein error aayi.")
-    else:
-        st.warning(f"⚠️ Excel file ('{excel_file}') nahi mili ya access nahi ho payi.")
+            if st.button("Generate Admission Form PDF", type="primary"):
+                pdf_file = generate_admission_pdf(selected_ref)
+                if pdf_file and os.path.exists(pdf_file):
+                    st.success("✅ PDF Successfully Generated!")
+                    with open(pdf_file, "rb") as f:
+                        st.download_button("📥 Download Admission Form", f, file_name=os.path.basename(pdf_file), mime="application/pdf")
+                else:
+                    st.error("⚠️ PDF generate karne mein koi problem aayi.")
 
 elif menu == "Acknowledgement Receipts (4-in-1)":
     df_excel = None
@@ -877,31 +897,18 @@ elif menu == "Acknowledgement Receipts (4-in-1)":
         reg_idx = col_to_idx(COL_REG_NO)
         ref_list = df_excel.iloc[1:, reg_idx].dropna().astype(str).tolist()
         
-        st.markdown("""<h2 style='text-align: center; color: #1e3d59;'>Holy Child School — 4-in-1 Acknowledgement Receipts</h2>""", unsafe_allow_html=True)
-        st.write("A4 size page par vertical layout mein ek sath 4 alag-alag students ki professional receipts print karne ke liye neeche 4 registration numbers select karein:")
+        st.markdown("""<h2 style='text-align: center; color: #1e3d59;'>Holy Child School — Acknowledgement Receipts (4-in-1)</h2>""", unsafe_allow_html=True)
         st.write("---")
         
-        c1, c2 = st.columns(2)
-        with c1:
-            ref1 = st.selectbox("1. Select First Student Registration No:", ["--Select--"] + ref_list, key="r1")
-            ref2 = st.selectbox("2. Select Second Student Registration No:", ["--Select--"] + ref_list, key="r2")
-        with c2:
-            ref3 = st.selectbox("3. Select Third Student Registration No:", ["--Select--"] + ref_list, key="r3")
-            ref4 = st.selectbox("4. Select Fourth Student Registration No:", ["--Select--"] + ref_list, key="r4")
-            
-        st.write("")
-        selected_refs = [r for r in [ref1, ref2, ref3, ref4] if r != "--Select--"]
-        
-        if st.button("🚀 Generate A4 4-in-1 Receipts PDF", use_container_width=True):
-            if len(selected_refs) == 0:
-                st.warning("⚠️ Kripya kam se kam ek student zaroor select karein.")
-            else:
-                receipt_pdf_path = generate_4_receipts_pdf(selected_refs)
-                if receipt_pdf_path and os.path.exists(receipt_pdf_path):
-                    st.success("✨ 4-in-1 Acknowledgement Receipts successfully generate ho gayi hain!")
-                    with open(receipt_pdf_path, "rb") as rec_file:
-                        st.download_button("📥 Download Receipts PDF", data=rec_file, file_name="Acknowledgement_Receipts_4in1.pdf", mime="application/pdf", use_container_width=True)
+        selected_refs = st.multiselect("Select up to 4 Registration Numbers (Column C):", ref_list, max_selections=4)
+        if st.button("Generate 4-in-1 Receipts PDF", type="primary"):
+            if selected_refs:
+                pdf_file = generate_4_receipts_pdf(selected_refs)
+                if pdf_file and os.path.exists(pdf_file):
+                    st.success("✅ 4-in-1 Receipts PDF Successfully Generated!")
+                    with open(pdf_file, "rb") as f:
+                        st.download_button("📥 Download 4-in-1 Receipts", f, file_name=os.path.basename(pdf_file), mime="application/pdf")
                 else:
-                    st.error("⚠️ Receipts generate karne mein error aayi.")
-    else:
-        st.warning(f"⚠️ Excel file ('{excel_file}') nahi mili ya access nahi ho payi.")
+                    st.error("⚠️ PDF generate karne mein koi problem aayi.")
+            else:
+                st.warning("⚠️ Kripya kam se kam ek Registration Number select karein.")

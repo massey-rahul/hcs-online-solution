@@ -126,16 +126,31 @@ def number_to_words(date_str):
                        "July", "August", "September", "October", "November", "December"]
         month = month_names[dt.month - 1]
         
-        def num_to_w(n):
+        def num_to_w(n, is_ordinal=False):
             d1 = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth", 
                   "Eleventh", "Twelfth", "Thirteenth", "Fourteenth", "Fifteenth", "Sixteenth", "Seventeenth", "Eighteenth", "Nineteenth"]
             d2 = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
-            if n < 20:
-                return d1[n]
+            ord_d1 = ["", "First", "Second", "Third", "Fourth", "Fifth", "Sixth", "Seventh", "Eighth", "Ninth", "Tenth", 
+                      "Eleventh", "Twelfth", "Thirteenth", "Fourteenth", "Fifteenth", "Sixteenth", "Seventeenth", "Eighteenth", "Nineteenth"]
+            ord_d2 = ["", "", "Twentieth", "Thirtieth", "Fortieth", "Fiftieth", "Sixtieth", "Seventieth", "Eightieth", "Ninetieth"]
+            
+            if is_ordinal:
+                if n < 20:
+                    return ord_d1[n]
+                else:
+                    tens = n // 10
+                    rem = n % 10
+                    if rem == 0:
+                        return ord_d2[tens]
+                    else:
+                        return d2[tens] + " " + ord_d1[rem]
             else:
-                return d2[n // 10] + (" " + d1[n % 10] if n % 10 != 0 else "")
+                if n < 20:
+                    return d1[n]
+                else:
+                    return d2[n // 10] + (" " + d1[n % 10] if n % 10 != 0 else "")
 
-        day_word = num_to_w(day)
+        day_word = num_to_w(day, is_ordinal=True)
         y_first = year // 100
         y_second = year % 100
         
@@ -261,23 +276,26 @@ def generate_admission_pdf(ref_number):
     c.setDash()
     c.rect(left_margin, top_offset - 120, right_margin - left_margin, 45)
     
+    # 1. Class & Section
     c.setFont("Helvetica", 10.5)
-    c.drawString(left_margin + 10, top_offset - 92, "Admission to Class :")
+    c.drawString(left_margin + 10, top_offset - 92, "Class & Section :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(left_margin + 110, top_offset - 92, f" {val(COL_CLASS)}")
+    c.drawString(142, top_offset - 92, f" {val(COL_CLASS)}")
 
+    # 2. Academic Year (Shifted right further)
     c.setFont("Helvetica", 10.5)
-    c.drawString(380, top_offset - 92, "Year :")
+    c.drawString(405, top_offset - 92, "Academic Year :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(420, top_offset - 92, " 2027-28")
+    c.drawString(500, top_offset - 92, " 2027-28")
     
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 112, "Date of Admission :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(left_margin + 110, top_offset - 112, f" {datetime.now().strftime('%d-%m-%Y')}")
+    c.drawString(142, top_offset - 112, f" {datetime.now().strftime('%d-%m-%Y')}")
     
+    # Admission No (Shifted right to align with Academic Year)
     c.setFont("Helvetica", 10.5)
-    c.drawString(380, top_offset - 112, "Admission No :")
+    c.drawString(405, top_offset - 112, "Admission No :")
 
     y = top_offset - 147
     line_gap = 19
@@ -371,9 +389,9 @@ def generate_admission_pdf(ref_number):
     c.line(369, y - 3, right_margin, y - 3)
 
     y -= line_gap
-    # j) Apar No. & k) Social Category
+    # j) Apaar No. & k) Social Category
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "j) Apar No. :")
+    c.drawString(left_margin + 15, y, "j) Apaar No. :")
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 82, y, "")  
     c.setDash(1, 2)
@@ -434,9 +452,9 @@ def generate_admission_pdf(ref_number):
     c.line(left_margin + 109, y - 3, 310, y - 3)
     
     c.setFont("Helvetica", 10)
-    c.drawString(318, y, "& Edu. Qual. :")
-    draw_fitted_string(c, 397, y, f" {f_qual}", right_margin - 397, font_name="Helvetica-Bold", start_size=10, min_size=6)
-    c.line(394, y - 3, right_margin, y - 3)
+    c.drawString(318, y, "Edu. Qual. :")
+    draw_fitted_string(c, 385, y, f" {f_qual}", right_margin - 385, font_name="Helvetica-Bold", start_size=10, min_size=6)
+    c.line(382, y - 3, right_margin, y - 3)
     
     y -= line_gap
     c.setFont("Helvetica", 10)
@@ -484,9 +502,9 @@ def generate_admission_pdf(ref_number):
     c.line(left_margin + 109, y - 3, 310, y - 3)
 
     c.setFont("Helvetica", 10)
-    c.drawString(318, y, "& Edu. Qual. :")
-    draw_fitted_string(c, 397, y, f" {m_qual}", right_margin - 397, font_name="Helvetica-Bold", start_size=10, min_size=6)  
-    c.line(394, y - 3, right_margin, y - 3)
+    c.drawString(318, y, "Edu. Qual. :")
+    draw_fitted_string(c, 385, y, f" {m_qual}", right_margin - 385, font_name="Helvetica-Bold", start_size=10, min_size=6)  
+    c.line(382, y - 3, right_margin, y - 3)
 
     y -= line_gap
     c.setFont("Helvetica", 10)
@@ -531,7 +549,7 @@ def generate_admission_pdf(ref_number):
     
     y -= 16
     c.setFont("Helvetica", 10)
-    c.drawString(440, y, "Pin No :")
+    c.drawString(440, y, "Pin No. :")
     if perm_pin:
         c.setFont("Helvetica-Bold", 10)
         c.drawString(487, y, f" {perm_pin}")
@@ -549,7 +567,7 @@ def generate_admission_pdf(ref_number):
     
     y -= 16
     c.setFont("Helvetica", 10)
-    c.drawString(440, y, "Pin No :")
+    c.drawString(440, y, "Pin No. :")
     if pres_pin:
         c.setFont("Helvetica-Bold", 10)
         c.drawString(487, y, f" {pres_pin}")
@@ -566,18 +584,18 @@ def generate_admission_pdf(ref_number):
 
     y -= line_gap
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Relationship with pupil :")
+    c.drawString(left_margin + 25, y, "Relationship with Pupil :")
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 152, y, f" {val(COL_GUARDIAN_REL)}")
     c.setDash(1, 2)
     c.line(left_margin + 149, y - 3, 350, y - 3)
 
     c.setFont("Helvetica", 10)
-    c.drawString(360, y, "Ph. No. :")
+    c.drawString(360, y, "Cont. No. :")
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(412, y, f" {val(COL_GUARDIAN_CONT)}")
+    c.drawString(422, y, f" {val(COL_GUARDIAN_CONT)}")
     c.setDash(1, 2)
-    c.line(409, y - 3, right_margin, y - 3)
+    c.line(419, y - 3, right_margin, y - 3)
 
     y -= line_gap
     c.setFont("Helvetica", 10)
@@ -588,18 +606,18 @@ def generate_admission_pdf(ref_number):
     c.line(left_margin + 104, y - 3, 330, y - 3)
     
     c.setFont("Helvetica", 10)
-    c.drawString(340, y, "Adm. No.")
+    c.drawString(335, y, "Adm. No. :")
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(387, y, f" {val(COL_SIB_ADM)}")
+    c.drawString(392, y, f" {val(COL_SIB_ADM)}")
     c.setDash(1, 2)
-    c.line(384, y - 3, 450, y - 3)
+    c.line(389, y - 3, 450, y - 3)
     
     c.setFont("Helvetica", 10)
-    c.drawString(460, y, "Class & Div")
+    c.drawString(455, y, "Class & Sec. :")
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(517, y, f" {val(COL_SIB_CLASS)}")
+    c.drawString(527, y, f" {val(COL_SIB_CLASS)}")
     c.setDash(1, 2)
-    c.line(514, y - 3, right_margin, y - 3)
+    c.line(524, y - 3, right_margin, y - 3)
 
     y -= 12
     c.setDash()
@@ -628,7 +646,7 @@ def generate_admission_pdf(ref_number):
     
     y -= 12
     c.setFont("Helvetica", 10)
-    c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Parent")
+    c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Parents")
 
     y -= 12
     c.setDash()
@@ -651,7 +669,7 @@ def generate_admission_pdf(ref_number):
     c.line(left_margin, y, 420, y)
     
     c.setFont("Helvetica", 9.5)
-    c.drawString(425, y, "(Name of the child in Block Letters)")
+    c.drawString(425, y, "(Name of the child in block letters)")
 
     y -= 16
     c.setFont("Helvetica", 10)
@@ -682,7 +700,7 @@ def generate_admission_pdf(ref_number):
     
     f_raw = val(COL_FATHER_NAME).replace("MR.", "").replace("Mr.", "").replace("MR ", "").strip()
     m_raw = val(COL_MOTHER_NAME).replace("MRS.", "").replace("Mrs.", "").replace("MS.", "").replace("Ms.", "").strip()
-    parents_str = f"MR. {f_raw} / MRS. {m_raw}"
+    parents_str = f"MR. {f_raw} & MRS. {m_raw}"
     
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 92, y, f" {parents_str}")
@@ -702,11 +720,10 @@ def generate_admission_pdf(ref_number):
     pr_sig_x1 = 380
     pr_sig_x2 = right_margin - 20
     c.line(pr_sig_x1, y, pr_sig_x2, y)
-    c.drawCentredString((pr_sig_x1 + pr_sig_x2) / 2.0, y, "/")
     
     y -= 12
     c.setFont("Helvetica", 10)
-    c.drawCentredString(left_margin + 90, y, "Signature of Parent")
+    c.drawCentredString(left_margin + 90, y, "Signature of Parents")
     c.drawCentredString(380 + (right_margin - 20 - 380) / 2.0, y, "Signature of Principal")
 
     c.setDash()
@@ -893,7 +910,6 @@ if menu == "Admission Form Generator":
             if pdf_file and os.path.exists(pdf_file):
                 st.success("✅ PDF Successfully Generated! Professional Preview is loaded below:")
                 
-                # Full-width professional preview display with FitH auto-scaling
                 show_pdf_preview(pdf_file)
                 
                 st.write("")
