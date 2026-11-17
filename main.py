@@ -194,12 +194,15 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Professional full-width live PDF preview inside Streamlit"""
+    """Cloud-friendly secure view & download helper that never gets blocked by Chrome"""
     with open(pdf_path, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    
     pdf_display = f'''
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH" width="100%" height="850px" style="border: none;"></iframe>
+    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 20px; background-color: #f8f9fa; text-align: center; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h3 style="color: #1e3d59; margin-bottom: 10px;">📄 Admission Form PDF is Ready!</h3>
+        <p style="color: #555; margin-bottom: 15px;">Cloud browsers restrict direct inline previews. Click below to open or download your form securely:</p>
+        <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px;">🔍 Open / Preview PDF in New Tab</a>
     </div>
     '''
     st.markdown(pdf_display, unsafe_allow_html=True)
