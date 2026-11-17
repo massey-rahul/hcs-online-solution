@@ -194,9 +194,8 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Reliable PDF preview and download helper for Streamlit Cloud"""
-    with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+    """Clean and direct download prompt for Streamlit Cloud"""
+    st.success("✅ PDF Successfully Generated and Ready for Download!")
     
     # Using object tag instead of iframe for better browser compatibility
     pdf_display = f'''
