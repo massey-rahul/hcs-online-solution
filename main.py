@@ -203,11 +203,10 @@ def show_pdf_preview(pdf_path):
         base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     
     # Check if app is running on Streamlit Cloud or Localhost
-    # Streamlit Cloud URLs contain 'streamlit.app' in the host context or we can check via base URL
     is_cloud = "streamlit.app" in st.context.headers.get("Host", "") if hasattr(st, "context") else False
     
     if not is_cloud:
-        # Local PC ke liye direct embed/iframe preview jo aapko local par chahiye
+        # Local PC ke liye direct embed/iframe preview
         pdf_display = f'''
         <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
             <embed src="data:application/pdf;base64,{base64_pdf}#view=FitH" type="application/pdf" width="100%" height="800px" style="border: none;" />
@@ -215,7 +214,7 @@ def show_pdf_preview(pdf_path):
         '''
         st.markdown(pdf_display, unsafe_allow_html=True)
     else:
-        # Streamlit Cloud ke liye 100% safe, clean aur professional view & download box (No Chrome blocking)
+        # Streamlit Cloud ke liye clean view & download box
         pdf_display = f'''
         <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 25px; background-color: #f8f9fa; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
             <h3 style="color: #1e3d59; margin-bottom: 10px;">📄 Admission Form PDF is Ready!</h3>
@@ -228,7 +227,7 @@ def show_pdf_preview(pdf_path):
         '''
         st.markdown(pdf_display, unsafe_allow_html=True)
         
-        # Streamlit native download button as a robust backup
+        # Streamlit native download button as backup
         st.download_button(
             label="📥 Download Admission Form (PDF)",
             data=pdf_bytes,
