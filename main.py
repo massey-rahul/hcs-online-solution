@@ -194,35 +194,18 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Instant auto-loading PDF preview for both Localhost and Streamlit Cloud without refresh"""
+    """Universal PDF Preview that works seamlessly on both Localhost and Streamlit Cloud"""
     with open(pdf_path, "rb") as f:
-        pdf_bytes = f.read()
-        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
+        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
     
-    # JavaScript Blob trick to open PDF in new tab instantly without any blank screen or refresh needed
+    # Using an advanced object tag with fallback data-uri handling optimized for cloud browsers
     pdf_display = f'''
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 20px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
-        <h3 style="color: #1e3d59; margin-bottom: 8px;">📄 Admission Form PDF is Ready!</h3>
-        <p style="color: #555; margin-bottom: 15px; font-size: 14px;">Click below to open the preview instantly in a new tab (fully automated, no refresh required):</p>
-        
-        <button onclick="
-            var base64Data = '{base64_pdf}';
-            var byteCharacters = atob(base64Data);
-            var byteNumbers = new Array(byteCharacters.length);
-            for (var i = 0; i < byteCharacters.length; i++) {{
-                byteNumbers[i] = byteCharacters.charCodeAt(i);
-            }}
-            var byteArray = new Uint8Array(byteNumbers);
-            var blob = new Blob([byteArray], {{type: 'application/pdf'}});
-            var blobUrl = URL.createObjectURL(blob);
-            window.open(blobUrl, '_blank');
-        " style="background-color: #1e3d59; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-            🔍 Open / Preview PDF in New Tab
-        </button>
-    </div>
-    
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
-        <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH&toolbar=0" width="100%" height="800px" style="border: none;"></iframe>
+    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="800px" style="border: none;">
+            <iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" style="border: none;">
+                <p>Your browser does not support PDFs. Please download the PDF to view it: <a href="data:application/pdf;base64,{base64_pdf}" download="Admission_Form.pdf">Download PDF</a>.</p>
+            </iframe>
+        </object>
     </div>
     '''
     st.markdown(pdf_display, unsafe_allow_html=True)
