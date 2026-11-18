@@ -197,7 +197,7 @@ import streamlit as st
 import base64
 
 def show_pdf_preview(pdf_path):
-    """Smart PDF handler: Direct embed for local PC, and safe instant view/download for Cloud"""
+    """Smart PDF handler: Direct embed for local PC, and safe native buttons for Cloud"""
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
         base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
@@ -214,27 +214,26 @@ def show_pdf_preview(pdf_path):
         '''
         st.markdown(pdf_display, unsafe_allow_html=True)
     else:
-        # Streamlit Cloud ke liye clean view & download box
-        pdf_display = f'''
-        <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 25px; background-color: #f8f9fa; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
-            <h3 style="color: #1e3d59; margin-bottom: 10px;">📄 Admission Form PDF is Ready!</h3>
-            <p style="color: #555; margin-bottom: 20px; font-size: 15px;">Cloud security restricts inline frames. Click below to instantly view, print, or download your admission form:</p>
-            
-            <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px; margin-right: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
-                🔍 Open / Preview PDF in New Tab
-            </a>
-        </div>
-        '''
-        st.markdown(pdf_display, unsafe_allow_html=True)
+        # Streamlit Cloud ke liye 100% safe aur clean native Streamlit layout
+        st.info("☁️ Running on Cloud: Direct inline frames are restricted by browser security. Use the options below to view or download:")
         
-        # Streamlit native download button as backup
-        st.download_button(
-            label="📥 Download Admission Form (PDF)",
-            data=pdf_bytes,
-            file_name="Admission_Form.pdf",
-            mime="application/pdf",
-            use_container_width=True
-        )
+        col1, col2 = st.columns(2)
+        with col1:
+            # Streamlit download button for instant saving
+            st.download_button(
+                label="📥 Download Admission Form",
+                data=pdf_bytes,
+                file_name="Admission_Form.pdf",
+                mime="application/pdf",
+                use_container_width=True
+            )
+        with col2:
+            # Native link button that opens the PDF securely in a new tab without any text/html errors
+            st.link_button(
+                label="🔍 Open / Preview PDF in New Tab",
+                url=f"data:application/pdf;base64,{base64_pdf}",
+                use_container_width=True
+            )
 
 def generate_admission_pdf(ref_number):
     matched_row = get_row_data(ref_number)
