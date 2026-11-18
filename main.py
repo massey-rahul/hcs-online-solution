@@ -186,6 +186,63 @@ def get_row_data(ref_number):
             return row
     return None
 
+def get_admission_details(ref_number):
+    """Ultimate Multi-Column Scanner for Admission_Details.xlsx"""
+    details_file = "Admission_Details.xlsx"
+    if not os.path.exists(details_file):
+        print(f"❌ File not found: {details_file}")
+        return "", ""
+            
+    try:
+        # Read excel without assuming headers
+        df = pd.read_excel(details_file, header=None)
+        target_reg = str(ref_number).strip().upper()
+        
+        print(f"🔍 Searching for Reg No: '{target_reg}' in {details_file}...")
+        
+        for idx, row in df.iterrows():
+            # Convert row values to strings for matching
+            row_vals = [str(v).strip() for v in row.values if pd.notna(v)]
+            row_upper = [v.upper() for v in row_vals]
+            
+            # Check if target registration number is in this row
+            if target_reg in row_upper:
+                class_sec = ""
+                adm_no = ""
+                
+                # Scan all cells in this specific row to pick valid values
+                for val in row.values:
+                    if pd.notna(val):
+                        v_str = str(val).strip()
+                        v_up = v_str.upper()
+                        
+                        # 1. Look for Class & Section (e.g., contains '-' like L.K.G - DAISY and not a heading)
+                        if "-" in v_str and "ADMISSION FEE" not in v_up and len(v_str) < 30:
+                            if any(c in v_up for c in ["L.K.G", "U.K.G", "NUR", "DAISY", "LILY", "ROSE", "JASMINE", "CLASS"]):
+                                class_sec = v_str
+                                
+                        # 2. Look for Admission Number (e.g., format like 27/001, strictly not order id or reg no)
+                        elif "/" in v_str and v_up != target_reg and not v_str.startswith("order_"):
+                            if len(v_str) <= 10 and v_str[:2].isdigit():
+                                adm_no = v_str
+                
+                # Fallback to fixed positions if pattern check didn't pick up
+                if not class_sec and len(row) > 2 and pd.notna(row.iloc[2]):
+                    val_c = str(row.iloc[2]).strip()
+                    if "ADMISSION FEE" not in val_c.upper():
+                        class_sec = val_c
+                if not adm_no and len(row) > 3 and pd.notna(row.iloc[3]):
+                    adm_no = str(row.iloc[3]).strip()
+                    
+                print(f"✅ Found! Admission No: '{adm_no}' | Class & Section: '{class_sec}'")
+                return adm_no, class_sec
+                
+        print(f"⚠️ Registration Number '{target_reg}' not found in Excel rows.")
+    except Exception as e:
+        print(f"❌ Error reading Excel file: {e}")
+        
+    return "", ""
+
 def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", start_size=10, min_size=6):
     size = start_size
     while size > min_size and c.stringWidth(text, font_name, size) > max_width:
@@ -232,6 +289,9 @@ def generate_admission_pdf(ref_number):
     if matched_row is None:
         return None
 
+    # Fetch dynamic admission number and class & section from Admission_Details.xlsx
+    mapped_adm_no, mapped_class_sec = get_admission_details(ref_number)
+
     def val(col_letter):
         idx = col_to_idx(col_letter)
         if idx < 0 or matched_row is None:
@@ -244,6 +304,8 @@ def generate_admission_pdf(ref_number):
         
         val_str = str(v).strip()
         if col_letter == COL_CLASS:
+            if mapped_class_sec:
+                return mapped_class_sec.upper()
             if val_str.lower() in ['nur', 'nursery']:
                 return 'NURSERY'
             return val_str.upper()
@@ -299,6 +361,7 @@ def generate_admission_pdf(ref_number):
     c.setDash()
     c.rect(left_margin, top_offset - 120, right_margin - left_margin, 45)
     
+    # Class & Section
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 92, "Class & Section :")
     c.setFont("Helvetica-Bold", 10.5)
@@ -307,15 +370,19 @@ def generate_admission_pdf(ref_number):
     c.setFont("Helvetica", 10.5)
     c.drawString(405, top_offset - 92, "Academic Year :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(500, top_offset - 92, " 2027-28")
+    c.drawString(485, top_offset - 92, " 2027-28")
     
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 112, "Date of Admission :")
     c.setFont("Helvetica-Bold", 10.5)
     c.drawString(142, top_offset - 112, f" {datetime.now().strftime('%d-%m-%Y')}")
     
+    # Admission No field mapping
     c.setFont("Helvetica", 10.5)
     c.drawString(405, top_offset - 112, "Admission No :")
+    if mapped_adm_no:
+        c.setFont("Helvetica-Bold", 10.5)
+        c.drawString(485, top_offset - 112, f" {mapped_adm_no}")
 
     y = top_offset - 147
     line_gap = 19
@@ -745,7 +812,6 @@ def main():
     if page == "Admission Form Generator":
         st.title("Holy Child School — Admission Form Generator")
         
-        # Registration number input / dropdown selection
         excel_file = "Online_Registration.xlsx"
         if not os.path.exists(excel_file):
             excel_file = "Online_Registration (2).xls"
