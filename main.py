@@ -193,22 +193,49 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.setFont(font_name, size)
     c.drawString(x, y, text)
 
+import streamlit as st
+import base64
+
 def show_pdf_preview(pdf_path):
-    """Universal PDF Preview that works seamlessly on both Localhost and Streamlit Cloud"""
+    """Smart PDF handler: Direct embed for local PC, and safe instant view/download for Cloud"""
     with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+        pdf_bytes = f.read()
+        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     
-    # Using an advanced object tag with fallback data-uri handling optimized for cloud browsers
-    pdf_display = f'''
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <object data="data:application/pdf;base64,{base64_pdf}" type="application/pdf" width="100%" height="800px" style="border: none;">
-            <iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="800px" style="border: none;">
-                <p>Your browser does not support PDFs. Please download the PDF to view it: <a href="data:application/pdf;base64,{base64_pdf}" download="Admission_Form.pdf">Download PDF</a>.</p>
-            </iframe>
-        </object>
-    </div>
-    '''
-    st.markdown(pdf_display, unsafe_allow_html=True)
+    # Check if app is running on Streamlit Cloud or Localhost
+    # Streamlit Cloud URLs contain 'streamlit.app' in the host context or we can check via base URL
+    is_cloud = "streamlit.app" in st.context.headers.get("Host", "") if hasattr(st, "context") else False
+    
+    if not is_cloud:
+        # Local PC ke liye direct embed/iframe preview jo aapko local par chahiye
+        pdf_display = f'''
+        <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
+            <embed src="data:application/pdf;base64,{base64_pdf}#view=FitH" type="application/pdf" width="100%" height="800px" style="border: none;" />
+        </div>
+        '''
+        st.markdown(pdf_display, unsafe_allow_html=True)
+    else:
+        # Streamlit Cloud ke liye 100% safe, clean aur professional view & download box (No Chrome blocking)
+        pdf_display = f'''
+        <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 25px; background-color: #f8f9fa; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+            <h3 style="color: #1e3d59; margin-bottom: 10px;">📄 Admission Form PDF is Ready!</h3>
+            <p style="color: #555; margin-bottom: 20px; font-size: 15px;">Cloud security restricts inline frames. Click below to instantly view, print, or download your admission form:</p>
+            
+            <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 12px 25px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 16px; margin-right: 10px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+                🔍 Open / Preview PDF in New Tab
+            </a>
+        </div>
+        '''
+        st.markdown(pdf_display, unsafe_allow_html=True)
+        
+        # Streamlit native download button as a robust backup
+        st.download_button(
+            label="📥 Download Admission Form (PDF)",
+            data=pdf_bytes,
+            file_name="Admission_Form.pdf",
+            mime="application/pdf",
+            use_container_width=True
+        )
 
 def generate_admission_pdf(ref_number):
     matched_row = get_row_data(ref_number)
