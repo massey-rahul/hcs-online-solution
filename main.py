@@ -194,14 +194,19 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Seamless live PDF preview for both Localhost and Streamlit Cloud"""
+    """Clean and stable PDF preview for both Local and Cloud"""
     with open(pdf_path, "rb") as f:
         base64_pdf = base64.b64encode(f.read()).decode('utf-8')
     
-    # Using an optimized data iframe with auto-scaling to eliminate blank/white screens on cloud
     pdf_display = f'''
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
-        <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH&toolbar=0" width="100%" height="850px" style="border: none;"></iframe>
+    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 15px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+        <h3 style="color: #1e3d59; margin-bottom: 8px;">📄 Admission Form PDF is Ready!</h3>
+        <p style="color: #555; margin-bottom: 15px; font-size: 14px;">If inline preview is restricted by your browser, click below to view or print instantly:</p>
+        <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 14px;">🔍 Open / Preview PDF in New Tab</a>
+    </div>
+    
+    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
+        <iframe src="data:application/pdf;base64,{base64_pdf}#view=FitH&toolbar=0" width="100%" height="800px" style="border: none;"></iframe>
     </div>
     '''
     st.markdown(pdf_display, unsafe_allow_html=True)
