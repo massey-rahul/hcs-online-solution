@@ -194,15 +194,31 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.drawString(x, y, text)
 
 def show_pdf_preview(pdf_path):
-    """Clean and stable PDF preview for both Local and Cloud"""
+    """Instant auto-loading PDF preview for both Localhost and Streamlit Cloud without refresh"""
     with open(pdf_path, "rb") as f:
-        base64_pdf = base64.b64encode(f.read()).decode('utf-8')
+        pdf_bytes = f.read()
+        base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     
+    # JavaScript Blob trick to open PDF in new tab instantly without any blank screen or refresh needed
     pdf_display = f'''
-    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 15px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
+    <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 20px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); text-align: center;">
         <h3 style="color: #1e3d59; margin-bottom: 8px;">📄 Admission Form PDF is Ready!</h3>
-        <p style="color: #555; margin-bottom: 15px; font-size: 14px;">If inline preview is restricted by your browser, click below to view or print instantly:</p>
-        <a href="data:application/pdf;base64,{base64_pdf}" target="_blank" style="background-color: #1e3d59; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block; font-size: 14px;">🔍 Open / Preview PDF in New Tab</a>
+        <p style="color: #555; margin-bottom: 15px; font-size: 14px;">Click below to open the preview instantly in a new tab (fully automated, no refresh required):</p>
+        
+        <button onclick="
+            var base64Data = '{base64_pdf}';
+            var byteCharacters = atob(base64Data);
+            var byteNumbers = new Array(byteCharacters.length);
+            for (var i = 0; i < byteCharacters.length; i++) {{
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }}
+            var byteArray = new Uint8Array(byteNumbers);
+            var blob = new Blob([byteArray], {{type: 'application/pdf'}});
+            var blobUrl = URL.createObjectURL(blob);
+            window.open(blobUrl, '_blank');
+        " style="background-color: #1e3d59; color: white; padding: 12px 24px; border: none; border-radius: 5px; font-weight: bold; cursor: pointer; font-size: 15px; box-shadow: 0 2px 4px rgba(0,0,0,0.2);">
+            🔍 Open / Preview PDF in New Tab
+        </button>
     </div>
     
     <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
