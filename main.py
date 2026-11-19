@@ -351,11 +351,20 @@ def generate_admission_pdf(ref_number):
     c.setDash()
     c.rect(left_margin, top_offset - 120, right_margin - left_margin, 45)
 
+    class_val = val(COL_CLASS)
+    class_upper = class_val.upper()
+    if "L.K.G" in class_upper or "LKG" in class_upper:
+        admission_date_str = "20-11-2026"
+    elif "NURSERY" in class_upper or re.search(r'\bNUR\b', class_upper):
+        admission_date_str = "21-11-2026"
+    else:
+        admission_date_str = datetime.now().strftime('%d-%m-%Y')
+
     # Class & Section box
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 92, "Class & Section :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(142, top_offset - 92, f" {val(COL_CLASS)}")
+    c.drawString(142, top_offset - 92, f" {class_val}")
 
     c.setFont("Helvetica", 10.5)
     c.drawString(405, top_offset - 92, "Academic Year :")
@@ -365,7 +374,7 @@ def generate_admission_pdf(ref_number):
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 112, "Date of Admission :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(142, top_offset - 112, f" {datetime.now().strftime('%d-%m-%Y')}")
+    c.drawString(142, top_offset - 112, f" {admission_date_str}")
 
     c.setFont("Helvetica", 10.5)
     c.drawString(405, top_offset - 112, "Admission No. :")
