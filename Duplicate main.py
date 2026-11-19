@@ -93,6 +93,12 @@ def format_address(addr_str):
     formatted = re.sub(r'uttar\s+pradesh', 'U.P.', text, flags=re.IGNORECASE)
     return formatted.strip().title()
 
+def clean_father_name(name_str):
+    if not name_str:
+        return ""
+    cleaned = re.sub(r'^(?:MR\.?|SHRI|SH\.?)\s+', '', str(name_str).strip(), flags=re.IGNORECASE).strip()
+    return f"MR. {cleaned}" if cleaned else ""
+
 def clean_office_address(addr_str):
     if not addr_str:
         return ""
@@ -186,6 +192,31 @@ def get_row_data(ref_number):
             return row
     return None
 
+def get_admission_details(ref_number):
+    """Strictly reads ONLY Admission_Details.xlsx and matches exact columns"""
+    details_file = "Admission_Details.xlsx"
+    
+    if not os.path.exists(details_file):
+        print(f"❌ Error: {details_file} does not exist in folder!")
+        return "", ""
+            
+    try:
+        df = pd.read_excel(details_file, header=None)
+        target_reg = str(ref_number).strip().upper()
+        
+        for idx, row in df.iterrows():
+            if len(row) > 4 and pd.notna(row.iloc[4]):
+                excel_reg = str(row.iloc[4]).strip().upper()
+                
+                if excel_reg == target_reg:
+                    class_sec = str(row.iloc[2]).strip() if len(row) > 2 and pd.notna(row.iloc[2]) else ""
+                    adm_no = str(row.iloc[3]).strip() if len(row) > 3 and pd.notna(row.iloc[3]) else ""
+                    return adm_no, class_sec
+    except Exception as e:
+        print(f"❌ Exception while reading file: {e}")
+        
+    return "", ""
+
 def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", start_size=10, min_size=6):
     size = start_size
     while size > min_size and c.stringWidth(text, font_name, size) > max_width:
@@ -193,20 +224,25 @@ def draw_fitted_string(c, x, y, text, max_width, font_name="Helvetica-Bold", sta
     c.setFont(font_name, size)
     c.drawString(x, y, text)
 
-import streamlit as st
-import base64
+def draw_dotted_after_text(c, text, x_start, font_name, font_size, y_line, x_end, space_gap=4):
+    """Starts a dotted line after a uniform gap from the end of `text`."""
+    if x_end <= x_start:
+        return
+    line_start = c.stringWidth(text, font_name, font_size) + x_start + space_gap
+    if line_start < x_end:
+        c.saveState()
+        c.setDash(1, 2)
+        c.line(line_start, y_line, x_end, y_line)
+        c.restoreState()
 
 def show_pdf_preview(pdf_path):
-    """Smart PDF handler: Direct embed for local PC, and safe native buttons for Cloud"""
     with open(pdf_path, "rb") as f:
         pdf_bytes = f.read()
         base64_pdf = base64.b64encode(pdf_bytes).decode('utf-8')
     
-    # Check if app is running on Streamlit Cloud or Localhost
     is_cloud = "streamlit.app" in st.context.headers.get("Host", "") if hasattr(st, "context") else False
     
     if not is_cloud:
-        # Local PC ke liye direct embed/iframe preview
         pdf_display = f'''
         <div style="border: 2px solid #1e3d59; border-radius: 8px; padding: 5px; background-color: #ffffff; margin-top: 15px; margin-bottom: 15px;">
             <embed src="data:application/pdf;base64,{base64_pdf}#view=FitH" type="application/pdf" width="100%" height="800px" style="border: none;" />
@@ -214,21 +250,18 @@ def show_pdf_preview(pdf_path):
         '''
         st.markdown(pdf_display, unsafe_allow_html=True)
     else:
-        # Streamlit Cloud ke liye 100% safe aur clean native Streamlit layout
         st.info("☁️ Running on Cloud: Direct inline frames are restricted by browser security. Use the options below to view or download:")
         
         col1, col2 = st.columns(2)
         with col1:
-            # Streamlit download button for instant saving
             st.download_button(
-                label="📥 Download Admission Form",
+                label="📥 Download PDF",
                 data=pdf_bytes,
-                file_name="Admission_Form.pdf",
+                file_name="Document.pdf",
                 mime="application/pdf",
                 use_container_width=True
             )
         with col2:
-            # Native link button that opens the PDF securely in a new tab without any text/html errors
             st.link_button(
                 label="🔍 Open / Preview PDF in New Tab",
                 url=f"data:application/pdf;base64,{base64_pdf}",
@@ -239,6 +272,8 @@ def generate_admission_pdf(ref_number):
     matched_row = get_row_data(ref_number)
     if matched_row is None:
         return None
+
+    mapped_adm_no, mapped_class_sec = get_admission_details(ref_number)
 
     def val(col_letter):
         idx = col_to_idx(col_letter)
@@ -252,6 +287,8 @@ def generate_admission_pdf(ref_number):
         
         val_str = str(v).strip()
         if col_letter == COL_CLASS:
+            if mapped_class_sec:
+                return mapped_class_sec.upper()
             if val_str.lower() in ['nur', 'nursery']:
                 return 'NURSERY'
             return val_str.upper()
@@ -294,30 +331,30 @@ def generate_admission_pdf(ref_number):
     c.drawCentredString(width / 2.0, top_offset - 20, "ADMISSION FORM")
 
     c.setFont("Helvetica", 10.5)
-    c.drawString(430, top_offset - 40, "Ref. No. :")
+    ref_label = "Ref. No. :"
+    c.drawString(430, top_offset - 40, ref_label)
     c.setFont("Helvetica-Bold", 10.5)
     c.drawString(490, top_offset - 40, f" {str(ref_number)}")
-    c.setDash(1, 2)
-    c.line(480, top_offset - 43, right_margin, top_offset - 43)
+    draw_dotted_after_text(c, ref_label, 430, "Helvetica", 10.5, top_offset - 43, right_margin)
 
     c.setFont("Helvetica", 10.5)
-    c.drawString(430, top_offset - 60, "PEN #")
-    c.line(470, top_offset - 63, right_margin, top_offset - 63)
+    pen_label = "PEN #:"
+    c.drawString(430, top_offset - 60, pen_label)
+    draw_dotted_after_text(c, pen_label, 430, "Helvetica", 10.5, top_offset - 63, right_margin)
 
     c.setDash()
     c.rect(left_margin, top_offset - 120, right_margin - left_margin, 45)
     
-    # 1. Class & Section
+    # Class & Section box
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 92, "Class & Section :")
     c.setFont("Helvetica-Bold", 10.5)
     c.drawString(142, top_offset - 92, f" {val(COL_CLASS)}")
 
-    # 2. Academic Year
     c.setFont("Helvetica", 10.5)
     c.drawString(405, top_offset - 92, "Academic Year :")
     c.setFont("Helvetica-Bold", 10.5)
-    c.drawString(500, top_offset - 92, " 2027-28")
+    c.drawString(485, top_offset - 92, " 2027-28")
     
     c.setFont("Helvetica", 10.5)
     c.drawString(left_margin + 10, top_offset - 112, "Date of Admission :")
@@ -325,38 +362,46 @@ def generate_admission_pdf(ref_number):
     c.drawString(142, top_offset - 112, f" {datetime.now().strftime('%d-%m-%Y')}")
     
     c.setFont("Helvetica", 10.5)
-    c.drawString(405, top_offset - 112, "Admission No :")
+    c.drawString(405, top_offset - 112, "Admission No. :")
+    if mapped_adm_no:
+        c.setFont("Helvetica-Bold", 10.5)
+        c.drawString(485, top_offset - 112, f" {mapped_adm_no}")
 
     y = top_offset - 147
     line_gap = 19
 
-    # 1. Name of Pupil
-    c.setFont("Helvetica", 10)
+    # 1 a) Name of Pupil
+    c.setFont("Helvetica-Bold", 10.5)
     c.drawString(left_margin, y, "1")
-    c.drawString(left_margin + 15, y, "a) Name of Pupil :")
-    c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 97, y, f" {val(COL_NAME)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 94, y - 3, right_margin, y - 3)
+    lbl_pupil = "a) Name of Pupil :"
+    c.setFont("Helvetica", 10)
+    c.drawString(left_margin + 15, y, lbl_pupil)
+    
+    c.saveState()
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(colors.black)
+    c.drawString(left_margin + 102, y, f" {val(COL_NAME)}")
+    c.restoreState()
+    draw_dotted_after_text(c, lbl_pupil, left_margin + 15, "Helvetica", 10, y - 3, right_margin)
     
     y -= line_gap
     dob_val = val(COL_DOB)
     dob_words = number_to_words(dob_val)
     
-    # b) Date of Birth
+    # 1 b) Date of Birth
+    lbl_dob = "b) Date of Birth :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "b) Date of Birth :")
+    c.drawString(left_margin + 15, y, lbl_dob)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 97, y, f" {dob_val}")
-    c.setDash(1, 2)
-    c.line(left_margin + 94, y - 3, 245, y - 3)  
+    draw_dotted_after_text(c, lbl_dob, left_margin + 15, "Helvetica", 10, y - 3, 245)
     
+    lbl_in_words = "(in words)"
     c.setFont("Helvetica", 10)
-    c.drawString(252, y, "(in words)")
+    c.drawString(252, y, lbl_in_words)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(312, y, f" {dob_words}")
-    c.setDash(1, 2)
-    c.line(309, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_in_words, 252, "Helvetica", 10, y - 3, right_margin)
 
     y -= 15
     c.setFont("Helvetica-Oblique", 9.5)
@@ -365,289 +410,303 @@ def generate_admission_pdf(ref_number):
     c.drawString(left_margin + 87, y, "ii. The \"Declaration on Statement of Age\" should also be signed.")
 
     y -= line_gap
-    # c) School last attended
+    # 1 c) Name of the school last attended
+    lbl_school = "c) Name of the school last attended :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "c) Name of the school last attended")
+    c.drawString(left_margin + 15, y, lbl_school)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 177, y, f" {val(COL_SCHOOL)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 174, y - 3, right_margin, y - 3)
+    c.drawString(left_margin + 182, y, f" {val(COL_SCHOOL)}")
+    draw_dotted_after_text(c, lbl_school, left_margin + 15, "Helvetica", 10, y - 3, right_margin)
     
     y -= line_gap
-    # d) Nationality & e) State
+    # 1 d) Nationality & e) State
+    lbl_nat = "d) Nationality :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "d) Nationality :")
+    c.drawString(left_margin + 15, y, lbl_nat)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 87, y, " INDIAN")
-    c.setDash(1, 2)
-    c.line(left_margin + 84, y - 3, 310, y - 3)
+    draw_dotted_after_text(c, lbl_nat, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_state = "e) State :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "e) State :")
+    c.drawString(330, y, lbl_state)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(372, y, f" {val(COL_STATE)}")
-    c.line(369, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_state, 330, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
-    # f) Home town & g) Mother Tongue
+    # 1 f) Home town & g) Mother Tongue
+    lbl_hometown = "f) Home town :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "f) Home town :")
+    c.drawString(left_margin + 15, y, lbl_hometown)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 92, y, f" {val(COL_HOMETOWN)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 89, y - 3, 310, y - 3)
+    c.drawString(left_margin + 87, y, f" {val(COL_HOMETOWN)}")
+    draw_dotted_after_text(c, lbl_hometown, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_mt = "g) Mother Tongue :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "g) Mother Tongue :")
+    c.drawString(330, y, lbl_mt)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(422, y, f" {val(COL_MOTHER_TONGUE)}")
-    c.line(419, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_mt, 330, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
-    # h) Religion & i) Caste
+    # 1 h) Religion & i) Caste
+    lbl_rel = "h) Religion :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "h) Religion :")
+    c.drawString(left_margin + 15, y, lbl_rel)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 82, y, f" {val(COL_RELIGION)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 79, y - 3, 310, y - 3)
+    c.drawString(left_margin + 77, y, f" {val(COL_RELIGION)}")
+    draw_dotted_after_text(c, lbl_rel, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_caste = "i) Caste :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "i) Caste :")
+    c.drawString(330, y, lbl_caste)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(372, y, f" {val(COL_CASTE)}")
-    c.line(369, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_caste, 330, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
-    # j) Apaar No. & k) Social Category
+    # 1 j) Apaar No. & k) Social Category
+    lbl_apaar = "j) Apaar No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "j) Apaar No. :")
+    c.drawString(left_margin + 15, y, lbl_apaar)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 82, y, "")  
-    c.setDash(1, 2)
-    c.line(left_margin + 79, y - 3, 310, y - 3)
+    draw_dotted_after_text(c, lbl_apaar, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_cat = "k) Social Category :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "k) Social Category :")
+    c.drawString(330, y, lbl_cat)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(417, y, f" {val(COL_CATEGORY)}")
-    c.setDash(1, 2)
-    c.line(414, y - 3, 475, y - 3)
+    c.drawString(422, y, f" {val(COL_CATEGORY)}")
+    lbl_cat_opt = "(SC/ST/OBC/GEN)"
     c.setFont("Helvetica", 9.5)
-    c.drawString(480, y, "(SC/ST/OBC/GEN)")
+    opt_w = c.stringWidth(lbl_cat_opt, "Helvetica", 9.5)
+    opt_x = right_margin - opt_w
+    c.drawString(opt_x, y, lbl_cat_opt)
+    draw_dotted_after_text(c, lbl_cat, 330, "Helvetica", 10, y - 3, opt_x - 6)
 
     y -= line_gap
-    # l) Aadhar No & m) Blood Group
+    # 1 l) Aadhar No. & m) Blood Group
+    lbl_aadhar = "l) Aadhar No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "l) Aadhar No :")
+    c.drawString(left_margin + 15, y, lbl_aadhar)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 87, y, f" {val(COL_AADHAR)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 84, y - 3, 310, y - 3)
+    draw_dotted_after_text(c, lbl_aadhar, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_blood = "m) Blood Group :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "m) Blood Group :")
+    c.drawString(330, y, lbl_blood)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(417, y, f" {val(COL_BLOOD)}")
-    c.line(414, y - 3, right_margin, y - 3)
+    c.drawString(412, y, f" {val(COL_BLOOD)}")
+    draw_dotted_after_text(c, lbl_blood, 330, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
-    # n) Contact No & o) E-mail
+    # 1 n) Contact No. & o) E-mail
+    lbl_cont = "n) Contact No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "n) Contact No :")
+    c.drawString(left_margin + 15, y, lbl_cont)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 87, y, f" {val(COL_CONTACT)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 84, y - 3, 310, y - 3)
+    c.drawString(left_margin + 92, y, f" {val(COL_CONTACT)}")
+    draw_dotted_after_text(c, lbl_cont, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_email = "o) E-mail :"
     c.setFont("Helvetica", 10)
-    c.drawString(330, y, "o) E-mail :")
+    c.drawString(330, y, lbl_email)
     draw_fitted_string(c, 377, y, f" {format_email(val(COL_EMAIL))}", right_margin - 377, font_name="Helvetica-Bold", start_size=10, min_size=7)
-    c.line(374, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_email, 330, "Helvetica", 10, y - 3, right_margin)
 
     # ==========================================
     # 2. FATHER & MOTHER DETAILS SECTION
     # ==========================================
     y -= 25
-    c.setFont("Helvetica", 10)
+    c.setFont("Helvetica-Bold", 10.5)
     c.drawString(left_margin, y, "2")
-    c.drawString(left_margin + 15, y, "a) Father's Name :")
+    lbl_fname = "a) Father's Name :"
+    c.setFont("Helvetica", 10)
+    c.drawString(left_margin + 15, y, lbl_fname)
     
     f_name = val(COL_FATHER_NAME)
     f_qual = val(COL_FATHER_QUAL)
     
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 112, y, f" {f_name}")
-    c.setDash(1, 2)
-    c.line(left_margin + 109, y - 3, 310, y - 3)
+    c.drawString(left_margin + 107, y, f" {f_name}")
+    draw_dotted_after_text(c, lbl_fname, left_margin + 15, "Helvetica", 10, y - 3, 310)
     
+    lbl_fqual = "Edu. Qual. :"
     c.setFont("Helvetica", 10)
-    c.drawString(318, y, "Edu. Qual. :")
-    draw_fitted_string(c, 385, y, f" {f_qual}", right_margin - 385, font_name="Helvetica-Bold", start_size=10, min_size=6)
-    c.line(382, y - 3, right_margin, y - 3)
+    c.drawString(318, y, lbl_fqual)
+    draw_fitted_string(c, 372, y, f" {f_qual}", right_margin - 372, font_name="Helvetica-Bold", start_size=10, min_size=6)
+    draw_dotted_after_text(c, lbl_fqual, 318, "Helvetica", 10, y - 3, right_margin)
     
     y -= line_gap
+    lbl_fcont = "Contact No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Contact No :")
+    c.drawString(left_margin + 25, y, lbl_fcont)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 97, y, f" {val(COL_FATHER_CONT)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 94, y - 3, 310, y - 3)
+    c.drawString(left_margin + 87, y, f" {val(COL_FATHER_CONT)}")
+    draw_dotted_after_text(c, lbl_fcont, left_margin + 25, "Helvetica", 10, y - 3, 310)
 
+    lbl_faadhaar = "Aadhaar No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(320, y, "Aadhaar No :")
+    c.drawString(320, y, lbl_faadhaar)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(392, y, f" {val(COL_FATHER_AADHAAR)}")  
-    c.line(389, y - 3, right_margin, y - 3)
+    c.drawString(382, y, f" {val(COL_FATHER_AADHAAR)}")  
+    draw_dotted_after_text(c, lbl_faadhaar, 320, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_focc = "Occupation / Designation :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Occupation / Designation :")
+    c.drawString(left_margin + 25, y, lbl_focc)
     
     f_occ = val(COL_FATHER_OCC)
     f_occ_extra = val(COL_FATHER_OCC_EXTRA)
     f_occ_display = f"{f_occ} ({f_occ_extra})" if f_occ_extra else f_occ
     
-    draw_fitted_string(c, left_margin + 152, y, f" {f_occ_display}", right_margin - (left_margin + 152), font_name="Helvetica-Bold", start_size=10, min_size=6)
-    c.setDash(1, 2)
-    c.line(left_margin + 149, y - 3, right_margin, y - 3)
+    draw_fitted_string(c, left_margin + 147, y, f" {f_occ_display}", right_margin - (left_margin + 147), font_name="Helvetica-Bold", start_size=10, min_size=6)
+    draw_dotted_after_text(c, lbl_focc, left_margin + 25, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_foff = "Office Address :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Office Address :")
+    c.drawString(left_margin + 25, y, lbl_foff)
     draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_FATHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7)
-    c.setDash(1, 2)
-    c.line(left_margin + 99, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_foff, left_margin + 25, "Helvetica", 10, y - 3, right_margin)
 
     y -= 22
+    lbl_mname = "b) Mother's Name :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "b) Mother's Name :")
+    c.drawString(left_margin + 15, y, lbl_mname)
     
     m_name = val(COL_MOTHER_NAME)
     m_qual = val(COL_MOTHER_QUAL)
     
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 112, y, f" {m_name}")
-    c.setDash(1, 2)
-    c.line(left_margin + 109, y - 3, 310, y - 3)
+    draw_dotted_after_text(c, lbl_mname, left_margin + 15, "Helvetica", 10, y - 3, 310)
 
+    lbl_mqual = "Edu. Qual. :"
     c.setFont("Helvetica", 10)
-    c.drawString(318, y, "Edu. Qual. :")
-    draw_fitted_string(c, 385, y, f" {m_qual}", right_margin - 385, font_name="Helvetica-Bold", start_size=10, min_size=6)  
-    c.line(382, y - 3, right_margin, y - 3)
+    c.drawString(318, y, lbl_mqual)
+    draw_fitted_string(c, 372, y, f" {m_qual}", right_margin - 372, font_name="Helvetica-Bold", start_size=10, min_size=6)  
+    draw_dotted_after_text(c, lbl_mqual, 318, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_mcont = "Contact No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Contact No :")
+    c.drawString(left_margin + 25, y, lbl_mcont)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 97, y, f" {val(COL_MOTHER_CONT)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 94, y - 3, 310, y - 3)
+    c.drawString(left_margin + 87, y, f" {val(COL_MOTHER_CONT)}")
+    draw_dotted_after_text(c, lbl_mcont, left_margin + 25, "Helvetica", 10, y - 3, 310)
 
+    lbl_maadhaar = "Aadhaar No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(320, y, "Aadhaar No :")
+    c.drawString(320, y, lbl_maadhaar)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(392, y, f" {val(COL_MOTHER_AADHAR)}")  
-    c.line(389, y - 3, right_margin, y - 3)
+    c.drawString(382, y, f" {val(COL_MOTHER_AADHAR)}")  
+    draw_dotted_after_text(c, lbl_maadhaar, 320, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_mocc = "Occupation / Designation :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Occupation / Designation :")
-    draw_fitted_string(c, left_margin + 152, y, f" {val(COL_MOTHER_OCC)}", right_margin - (left_margin + 152), font_name="Helvetica-Bold", start_size=10, min_size=6)
-    c.setDash(1, 2)
-    c.line(left_margin + 149, y - 3, right_margin, y - 3)
+    c.drawString(left_margin + 25, y, lbl_mocc)
+    draw_fitted_string(c, left_margin + 147, y, f" {val(COL_MOTHER_OCC)}", right_margin - (left_margin + 147), font_name="Helvetica-Bold", start_size=10, min_size=6)
+    draw_dotted_after_text(c, lbl_mocc, left_margin + 25, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_moff = "Office Address :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Office Address :")
+    c.drawString(left_margin + 25, y, lbl_moff)
     draw_fitted_string(c, left_margin + 102, y, f" {clean_office_address(val(COL_MOTHER_OFFICE))}", right_margin - (left_margin + 102), font_name="Helvetica-Bold", start_size=10, min_size=7)
-    c.setDash(1, 2)
-    c.line(left_margin + 99, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_moff, left_margin + 25, "Helvetica", 10, y - 3, right_margin)
 
     # ==========================================
     # 3. ADDRESS & GUARDIAN SECTION
     # ==========================================
     y -= 22
-    c.setFont("Helvetica", 10)
+    c.setFont("Helvetica-Bold", 10.5)
     c.drawString(left_margin, y, "3")
-    c.drawString(left_margin + 15, y, "a) Permanent Address :")
+    lbl_perm = "a) Permanent Address :"
+    c.setFont("Helvetica", 10)
+    c.drawString(left_margin + 15, y, lbl_perm)
     
     perm_clean, perm_pin = extract_address_and_pin(val(COL_PERM_ADDR))
     draw_fitted_string(c, left_margin + 122, y, f" {perm_clean}", right_margin - (left_margin + 122), font_name="Helvetica-Bold", start_size=10, min_size=7)
-    c.setDash(1, 2)
-    c.line(left_margin + 119, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_perm, left_margin + 15, "Helvetica", 10, y - 3, right_margin)
     
     y -= 16
+    lbl_ppin = "Pin No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(440, y, "Pin No. :")
+    c.drawString(440, y, lbl_ppin)
     if perm_pin:
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(487, y, f" {perm_pin}")
-    c.setDash(1, 2)
-    c.line(484, y - 3, right_margin, y - 3)
+        c.drawString(482, y, f" {perm_pin}")
+    draw_dotted_after_text(c, lbl_ppin, 440, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_pres = "b) Present Address :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "b) Present Address :")
+    c.drawString(left_margin + 15, y, lbl_pres)
     
     pres_clean, pres_pin = extract_address_and_pin(val(COL_PRES_ADDR))
     draw_fitted_string(c, left_margin + 112, y, f" {pres_clean}", right_margin - (left_margin + 112), font_name="Helvetica-Bold", start_size=10, min_size=7)
-    c.setDash(1, 2)
-    c.line(left_margin + 109, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_pres, left_margin + 15, "Helvetica", 10, y - 3, right_margin)
     
     y -= 16
+    lbl_prpin = "Pin No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(440, y, "Pin No. :")
+    c.drawString(440, y, lbl_prpin)
     if pres_pin:
         c.setFont("Helvetica-Bold", 10)
-        c.drawString(487, y, f" {pres_pin}")
-    c.setDash(1, 2)
-    c.line(484, y - 3, right_margin, y - 3)
+        c.drawString(482, y, f" {pres_pin}")
+    draw_dotted_after_text(c, lbl_prpin, 440, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_guard = "c) Local Guardian :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 15, y, "c) Local Guardian :")
+    c.drawString(left_margin + 15, y, lbl_guard)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 102, y, f" {val(COL_GUARDIAN)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 99, y - 3, right_margin, y - 3)
+    c.drawString(left_margin + 107, y, f" {val(COL_GUARDIAN)}")
+    draw_dotted_after_text(c, lbl_guard, left_margin + 15, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_grel = "Relationship with Pupil :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Relationship with Pupil :")
+    c.drawString(left_margin + 25, y, lbl_grel)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 152, y, f" {val(COL_GUARDIAN_REL)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 149, y - 3, 350, y - 3)
+    c.drawString(left_margin + 137, y, f" {val(COL_GUARDIAN_REL)}")
+    draw_dotted_after_text(c, lbl_grel, left_margin + 25, "Helvetica", 10, y - 3, 350)
 
+    lbl_gcont = "Contact No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(360, y, "Cont. No. :")
+    c.drawString(360, y, lbl_gcont)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(422, y, f" {val(COL_GUARDIAN_CONT)}")
-    c.setDash(1, 2)
-    c.line(419, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_gcont, 360, "Helvetica", 10, y - 3, right_margin)
 
     y -= line_gap
+    lbl_sib = "Siblings Details :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin + 25, y, "Siblings Details :")
+    c.drawString(left_margin + 25, y, lbl_sib)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(left_margin + 107, y, f" {val(COL_SIB_NAME)}")
-    c.setDash(1, 2)
-    c.line(left_margin + 104, y - 3, 330, y - 3)
+    c.drawString(left_margin + 102, y, f" {val(COL_SIB_NAME)}")
+    draw_dotted_after_text(c, lbl_sib, left_margin + 25, "Helvetica", 10, y - 3, 330)
     
+    lbl_sadm = "Adm. No. :"
     c.setFont("Helvetica", 10)
-    c.drawString(335, y, "Adm. No. :")
+    c.drawString(335, y, lbl_sadm)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(392, y, f" {val(COL_SIB_ADM)}")
-    c.setDash(1, 2)
-    c.line(389, y - 3, 450, y - 3)
+    draw_dotted_after_text(c, lbl_sadm, 335, "Helvetica", 10, y - 3, 450)
     
+    lbl_scls = "Class & Sec. :"
     c.setFont("Helvetica", 10)
-    c.drawString(455, y, "Class & Sec. :")
+    c.drawString(455, y, lbl_scls)
     c.setFont("Helvetica-Bold", 10)
-    c.drawString(527, y, f" {val(COL_SIB_CLASS)}")
-    c.setDash(1, 2)
-    c.line(524, y - 3, right_margin, y - 3)
+    c.drawString(517, y, f" {val(COL_SIB_CLASS)}")
+    draw_dotted_after_text(c, lbl_scls, 455, "Helvetica", 10, y - 3, right_margin)
 
     y -= 12
     c.setDash()
@@ -693,29 +752,44 @@ def generate_admission_pdf(ref_number):
 
     y -= 20
     student_name = val(COL_NAME)
-    c.setFont("Helvetica-Bold", 10)
-    c.drawCentredString(265, y + 2, f" {student_name}")
-    c.setDash(1, 2)
-    c.line(left_margin, y, 420, y)
-    
+    lbl_block = "(Name of the child in block letters)"
     c.setFont("Helvetica", 9.5)
-    c.drawString(425, y, "(Name of the child in block letters)")
+    block_w = c.stringWidth(lbl_block, "Helvetica", 9.5)
+    block_x = right_margin - block_w
+    line_end_x = block_x - 8
+
+    c.saveState()
+    c.setFont("Helvetica-Bold", 11)
+    c.setFillColor(colors.black)
+    c.drawCentredString((left_margin + line_end_x) / 2.0, y + 2, f" {student_name}")
+    c.restoreState()
+
+    c.saveState()
+    c.setDash(1, 2)
+    c.line(left_margin, y, line_end_x, y)
+    c.restoreState()
+
+    c.setFont("Helvetica", 9.5)
+    c.drawString(block_x, y, lbl_block)
+    draw_dotted_after_text(c, lbl_block, 425, "Helvetica", 9.5, y, right_margin)
 
     y -= 16
+    lbl_decl_dob = "Date of Birth :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin, y, "Date of Birth :")
+    c.drawString(left_margin, y, lbl_decl_dob)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 77, y, f" {dob_val}")
-    c.setDash(1, 2)
-    c.line(left_margin + 74, y - 3, 270, y - 3)
+    draw_dotted_after_text(c, lbl_decl_dob, left_margin, "Helvetica", 10, y - 3, 270)
+    
+    lbl_decl_words = "(in words)"
     c.setFont("Helvetica", 10)
-    c.drawString(285, y, "(in words)")
+    c.drawString(285, y, lbl_decl_words)
     c.setFont("Helvetica-Bold", 10)
     c.drawString(337, y, f" {dob_words}")
-    c.line(334, y - 3, right_margin, y - 3)
+    draw_dotted_after_text(c, lbl_decl_words, 285, "Helvetica", 10, y - 3, right_margin)
 
     y -= 8
-    p2_text = "is entirely correct and I fully understand that the school authorities will at no time entertain any application from me or from any one else connected with my ward for a change in this statement under any circumstances."
+    p2_text = "is entirely correct and I fully understand that the school authorities will at no time entertain any application from me or from anyone else connected with my ward for a change in this statement under any circumstances."
     p2 = Paragraph(p2_text, decl_style)
     t2 = Table([[p2]], colWidths=[right_margin - left_margin])
     t2.setStyle(TableStyle([('TOPPADDING', (0,0), (-1,-1), 0), ('BOTTOMPADDING', (0,0), (-1,-1), 0), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0)]))
@@ -725,8 +799,9 @@ def generate_admission_pdf(ref_number):
 
     y = y - t2_h - 18
 
+    lbl_parents = "Name of parents :"
     c.setFont("Helvetica", 10)
-    c.drawString(left_margin, y, "Name of parents :")
+    c.drawString(left_margin, y, lbl_parents)
     
     f_raw = val(COL_FATHER_NAME).replace("MR.", "").replace("Mr.", "").replace("MR ", "").strip()
     m_raw = val(COL_MOTHER_NAME).replace("MRS.", "").replace("Mrs.", "").replace("MS.", "").replace("Ms.", "").strip()
@@ -734,8 +809,7 @@ def generate_admission_pdf(ref_number):
     
     c.setFont("Helvetica-Bold", 10)
     c.drawString(left_margin + 92, y, f" {parents_str}")
-    c.setDash(1, 2)
-    c.line(left_margin + 89, y - 3, 430, y - 3)
+    draw_dotted_after_text(c, lbl_parents, left_margin, "Helvetica", 10, y - 3, 430)
     
     y -= 35
     c.setDash(1, 2)
@@ -760,9 +834,14 @@ def generate_admission_pdf(ref_number):
     c.save()
     return pdf_path
 
+# ==========================================
+# 🎫 ACKNOWLEDGEMENT RECEIPT (4-in-1) FUNCTIONS
+# ==========================================
 def draw_single_receipt(c, x, y_bottom, width, height, matched_row, ref_number):
     if matched_row is None:
         return
+    mapped_adm_no, mapped_class_sec = get_admission_details(ref_number)
+
     def val(col_letter):
         idx = col_to_idx(col_letter)
         if idx < 0:
@@ -772,6 +851,8 @@ def draw_single_receipt(c, x, y_bottom, width, height, matched_row, ref_number):
             return ''
         val_str = str(v).strip()
         if col_letter == COL_CLASS:
+            if mapped_class_sec:
+                return mapped_class_sec.upper()
             if val_str.lower() in ['nur', 'nursery']:
                 return 'NURSERY'
             return val_str.upper()
@@ -781,7 +862,6 @@ def draw_single_receipt(c, x, y_bottom, width, height, matched_row, ref_number):
     c.rect(x, y_bottom, width, height)
 
     logo_path = "school_logo.png"
-
     if os.path.exists(logo_path):
         try:
             c.saveState()
@@ -826,34 +906,49 @@ def draw_single_receipt(c, x, y_bottom, width, height, matched_row, ref_number):
     c.setFont("Helvetica-Bold", 8.5)
     c.drawString(x + width - table_right_margin - 78, header_y - 42, f" {date_str}")
 
-    cell_style = ParagraphStyle('ReceiptCell', fontName='Helvetica', fontSize=7.2, leading=9.5)
-    cell_bold = ParagraphStyle('ReceiptCellBold', fontName='Helvetica-Bold', fontSize=7.2, leading=9.5)
+    cell_style = ParagraphStyle('ReceiptCell', fontName='Helvetica', fontSize=8.2, leading=10.5)
+    cell_bold = ParagraphStyle('ReceiptCellBold', fontName='Helvetica-Bold', fontSize=8.2, leading=10.5)
 
-    class_full = val(COL_CLASS)
+    father_display = clean_father_name(val(COL_FATHER_NAME))
+    class_sec_val = val(COL_CLASS)
     addr_val = format_address(val(COL_PRES_ADDR) if val(COL_PRES_ADDR) else val(COL_PERM_ADDR))
 
     t_data = [
         [Paragraph("Name:", cell_bold), Paragraph(f" {val(COL_NAME)}", cell_style)],
-        [Paragraph("Father's Name:", cell_bold), Paragraph(f" MR. {val(COL_FATHER_NAME)}", cell_style)],
-        [Paragraph("Admission No:", cell_bold), Paragraph("", cell_style)],
-        [Paragraph("Class & Div:", cell_bold), Paragraph(f" {class_full}", cell_style)],
+        [Paragraph("Father's Name:", cell_bold), Paragraph(f" {father_display}", cell_style)],
+        [Paragraph("Admission No:", cell_bold), Paragraph(f" {mapped_adm_no}", cell_style)],
+        [Paragraph("Class & Section:", cell_bold), Paragraph(f" {class_sec_val}", cell_style)],
         [Paragraph("Address:", cell_bold), Paragraph(f" {addr_val}", cell_style)]
     ]
     
-    t = Table(t_data, colWidths=[75, table_width - 75])
-    t.setStyle(TableStyle([('GRID', (0,0), (-1,-1), 0.5, colors.HexColor('#333333')), ('TOPPADDING', (0,0), (-1,-1), 2.5), ('BOTTOMPADDING', (0,0), (-1,-1), 2.5), ('LEFTPADDING', (0,0), (-1,-1), 3), ('RIGHTPADDING', (0,0), (-1,-1), 3), ('VALIGN', (0,0), (-1,-1), 'MIDDLE')]))
+    t = Table(t_data, colWidths=[86, table_width - 86])
+    t.setStyle(TableStyle([
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#333333')),
+        ('TOPPADDING', (0, 0), (-1, -1), 3.8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 3.8),
+        ('LEFTPADDING', (0, 0), (-1, -1), 3.5),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 3.5),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE')
+    ]))
     
     t.wrapOn(c, table_width, height)
-    t.drawOn(c, x + table_left_margin, header_y - 148)
+    t_w, t_h = t.wrap(table_width, height)
+    table_bottom_y = header_y - 48 - t_h
+    t.drawOn(c, x + table_left_margin, table_bottom_y)
 
-    p_style = ParagraphStyle('ConfStyle', fontName='Helvetica-Oblique', fontSize=7.8, leading=10.5)
+    p_style = ParagraphStyle('ConfStyle', fontName='Helvetica-Oblique', fontSize=8.8, leading=11.5)
     conf_text = "This is to confirm your Admission with Holy Child School as per above details and Received Rs: 1,000/- (One Thousand only) cash on account of Registration for new admission."
     p = Paragraph(conf_text, p_style)
     
     t_conf = Table([[p]], colWidths=[table_width])
-    t_conf.setStyle(TableStyle([('TOPPADDING', (0,0), (-1,-1), 1), ('BOTTOMPADDING', (0,0), (-1,-1), 1), ('LEFTPADDING', (0,0), (-1,-1), 0), ('RIGHTPADDING', (0,0), (-1,-1), 0)]))
-    t_conf.wrapOn(c, table_width, 40)
-    t_conf.drawOn(c, x + table_left_margin, header_y - 195)
+    t_conf.setStyle(TableStyle([
+        ('TOPPADDING', (0, 0), (-1, -1), 2),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 2),
+        ('LEFTPADDING', (0, 0), (-1, -1), 0),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 0)
+    ]))
+    _, conf_h = t_conf.wrap(table_width, 60)
+    t_conf.drawOn(c, x + table_left_margin, table_bottom_y - 8 - conf_h)
 
     bottom_margin_pts = 71
     c.setDash(1, 1)
@@ -906,94 +1001,68 @@ def generate_4_receipts_pdf(ref_list):
     c.save()
     return pdf_path
 
-st.sidebar.title("Holy Child School Hub")
-menu = st.sidebar.radio("Navigation", ["Admission Form Generator", "Acknowledgement Receipts (4-in-1)"])
 
-excel_file = "Online_Registration.xlsx"
-if not os.path.exists(excel_file):
-    excel_file = "Online_Registration (2).xls"
-
-if menu == "Admission Form Generator":
-    df_excel = None
-    if os.path.exists(excel_file):
-        try:
-            df_excel = pd.read_excel(excel_file, header=None, engine='openpyxl')
-        except Exception as e:
-            st.error(f"⚠️ Excel file read karne mein error aayi: {e}")
-
-    if df_excel is not None:
-        reg_idx = col_to_idx(COL_REG_NO)
-        ref_list = df_excel.iloc[1:, reg_idx].dropna().astype(str).tolist()
+# ==========================================
+# 🚀 STREAMLIT APP UI INTERFACE & NAVIGATION
+# ==========================================
+def main():
+    st.sidebar.title("Navigation")
+    page = st.sidebar.radio("Go to", ["Admission Form Generator", "Acknowledgement Receipts (4-in-1)"])
+    
+    excel_file = "Online_Registration.xlsx"
+    if not os.path.exists(excel_file):
+        excel_file = "Online_Registration (2).xls"
         
-        st.markdown("""<h2 style='text-align: center; color: #1e3d59;'>Holy Child School — Admission Form Generator</h2>""", unsafe_allow_html=True)
-        st.write("---")
+    if page == "Admission Form Generator":
+        st.title("Holy Child School — Admission Form Generator")
         
-        col1, col2 = st.columns([3, 1])
-        with col1:
-            selected_ref = st.selectbox("Select Registration Number (Column C):", ref_list)
-        with col2:
-            st.write("")
-            generate_clicked = st.button("Generate Admission Form PDF", type="primary")
-
-        if generate_clicked:
-            pdf_file = generate_admission_pdf(selected_ref)
-            if pdf_file and os.path.exists(pdf_file):
-                st.success("✅ PDF Successfully Generated! Professional Preview is loaded below:")
+        if os.path.exists(excel_file):
+            try:
+                df = pd.read_excel(excel_file, header=None, engine='openpyxl' if excel_file.endswith('.xlsx') else 'xlrd')
+                reg_idx = col_to_idx(COL_REG_NO)
+                reg_numbers = df.iloc[1:, reg_idx].dropna().astype(str).tolist() if len(df) > 1 else []
+            except Exception:
+                reg_numbers = []
                 
-                show_pdf_preview(pdf_file)  # <--- Preview wapas add kar diya hai
+            selected_reg = st.selectbox("Select Registration Number (Column C):", reg_numbers)
+            
+            if st.button("Generate Admission Form PDF", type="primary"):
+                if selected_reg:
+                    pdf_path = generate_admission_pdf(selected_reg)
+                    if pdf_path and os.path.exists(pdf_path):
+                        st.success("PDF Successfully Generated! Professional Preview is loaded below:")
+                        show_pdf_preview(pdf_path)
+                    else:
+                        st.error("Failed to generate PDF. Please check data for this registration number.")
+        else:
+            st.warning("Excel data file not found in the project directory.")
+            
+    elif page == "Acknowledgement Receipts (4-in-1)":
+        st.title("Acknowledgement Receipts Hub (4-in-1)")
+        
+        if os.path.exists(excel_file):
+            try:
+                df = pd.read_excel(excel_file, header=None, engine='openpyxl' if excel_file.endswith('.xlsx') else 'xlrd')
+                reg_idx = col_to_idx(COL_REG_NO)
+                reg_numbers = df.iloc[1:, reg_idx].dropna().astype(str).tolist() if len(df) > 1 else []
+            except Exception:
+                reg_numbers = []
                 
-                st.write("")
-                col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
-                with col_d2:
-                    with open(pdf_file, "rb") as f:
-                        st.download_button(
-                            "📥 Download Admission Form (PDF)", 
-                            f, 
-                            file_name=os.path.basename(pdf_file), 
-                            mime="application/pdf",
-                            use_container_width=True
-                        )
-            else:
-                st.error("⚠️ PDF generate karne mein koi problem aayi.")
-
-elif menu == "Acknowledgement Receipts (4-in-1)":
-    df_excel = None
-    if os.path.exists(excel_file):
-        try:
-            df_excel = pd.read_excel(excel_file, header=None, engine='openpyxl')
-        except Exception as e:
-            st.error(f"⚠️ Excel file read karne mein error aayi: {e}")
-
-    if df_excel is not None:
-        reg_idx = col_to_idx(COL_REG_NO)
-        ref_list = df_excel.iloc[1:, reg_idx].dropna().astype(str).tolist()
-        
-        st.markdown("""<h2 style='text-align: center; color: #1e3d59;'>Holy Child School — Acknowledgement Receipts (4-in-1)</h2>""", unsafe_allow_html=True)
-        st.write("---")
-        
-        selected_refs = st.multiselect("Select up to 4 Registration Numbers (Column C):", ref_list, max_selections=4)
-        receipt_clicked = st.button("Generate 4-in-1 Receipts PDF", type="primary")
-
-        if receipt_clicked:
-            if selected_refs:
-                pdf_file = generate_4_receipts_pdf(selected_refs)
-                if pdf_file and os.path.exists(pdf_file):
-                    st.success("✅ 4-in-1 Receipts PDF Successfully Generated! Professional Preview is loaded below:")
-                    
-                    show_pdf_preview(pdf_file)  # <--- Preview wapas add kar diya hai
-                    
-                    st.write("")
-                    col_d1, col_d2, col_d3 = st.columns([1, 2, 1])
-                    with col_d2:
-                        with open(pdf_file, "rb") as f:
-                            st.download_button(
-                                "📥 Download 4-in-1 Receipts (PDF)", 
-                                f, 14, 
-                                file_name=os.path.basename(pdf_file), 
-                                mime="application/pdf",
-                                use_container_width=True
-                            )
+            st.write("Select up to 4 Registration Numbers for the 4-in-1 Acknowledgement Receipt page:")
+            selected_ack_regs = st.multiselect("Select Registration Numbers (Max 4):", reg_numbers, max_selections=4)
+            
+            if st.button("Generate 4-in-1 Acknowledgement Receipt PDF", type="primary"):
+                if selected_ack_regs:
+                    receipt_pdf_path = generate_4_receipts_pdf(selected_ack_regs)
+                    if receipt_pdf_path and os.path.exists(receipt_pdf_path):
+                        st.success("4-in-1 Acknowledgement Receipts PDF Successfully Generated!")
+                        show_pdf_preview(receipt_pdf_path)
+                    else:
+                        st.error("Failed to generate 4-in-1 receipts PDF.")
                 else:
-                    st.error("⚠️ PDF generate karne mein koi problem aayi.")
-            else:
-                st.warning("⚠️ Kripya kam se kam ek Registration Number select karein.")
+                    st.warning("Please select at least one registration number.")
+        else:
+            st.warning("Excel data file not found in the project directory.")
+
+if __name__ == "__main__":
+    main()
